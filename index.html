@@ -179,7 +179,7 @@
     }
     .crop-container {
       width: 100%;
-      height: 360px;
+      height: 380px;
       overflow: hidden;
       border-radius: 12px;
       background: #e4e4e7;
@@ -187,6 +187,15 @@
     .crop-container img {
       max-width: 100%;
       display: block;
+    }
+
+    /* Custom Cropper Styles to hide resizing handles */
+    .cropper-line, .cropper-point {
+      display: none !important;
+    }
+    .cropper-view-box {
+      outline: 2px solid #2563eb !important;
+      outline-color: rgba(37, 99, 235, 0.8) !important;
     }
 
     /* Editor Toolbar */
@@ -332,11 +341,12 @@
   let fabricAOMap = null;
   const textureLoader = new THREE.TextureLoader();
 
-  // Cropper State
+  // Cropper State & Preserved Settings
   let cropper = null;
   let currentEditingType = null;
   let currentScaleX = 1;
   const originalRawImages = { front: null, back: null };
+  const savedCropperData = { front: null, back: null };
 
   function init() {
     const container = document.getElementById('canvas-container');
@@ -467,8 +477,6 @@
   // Pop-up Editor Logic
   function openCropModal(type, imageSrc) {
     currentEditingType = type;
-    currentScaleX = 1;
-    document.getElementById('rotate-range').value = 0;
     document.getElementById('crop-modal-title').innerText = `Adjust ${type === 'front' ? 'Front' : 'Back'} Print`;
     
     const targetImg = document.getElementById('crop-target-image');
@@ -479,19 +487,26 @@
     if (cropper) cropper.destroy();
 
     cropper = new Cropper(targetImg, {
-      aspectRatio: 1.31, // UV Plane Mesh Ratio
-      viewMode: 0,       // Allows cropbox to extend beyond original image dimensions!
-      dragMode: 'move',
-      autoCropArea: 0.8,
-      restore: false,
-      guides: true,
-      center: true,
-      highlight: false,
-      cropBoxMovable: true,
-      cropBoxResizable: true,
+      aspectRatio: 1.31,
+      viewMode: 0,
+      dragMode: 'move',          // Drag the image itself
+      cropBoxMovable: false,     // Cropbox is strictly locked in place
+      cropBoxResizable: false,   // Cropbox size cannot be changed
       toggleDragModeOnDblclick: false,
+      autoCropArea: 0.85,
+      ready() {
+        // Restore state if previously edited
+        if (savedCropperData[type]) {
+          cropper.setData(savedCropperData[type].data);
+          currentScaleX = savedCropperData[type].scaleX;
+          cropper.scaleX(currentScaleX);
+          document.getElementById('rotate-range').value = Math.round(savedCropperData[type].data.rotate);
+        } else {
+          currentScaleX = 1;
+          document.getElementById('rotate-range').value = 0;
+        }
+      },
       crop(event) {
-        // Sync slider with manual rotation if triggered externally
         document.getElementById('rotate-range').value = Math.round(event.detail.rotate);
       }
     });
@@ -532,6 +547,12 @@
 
   function applyCroppedPrint() {
     if (!cropper || !currentEditingType) return;
+
+    // Save current transform state to restore on Edit
+    savedCropperData[currentEditingType] = {
+      data: cropper.getData(),
+      scaleX: currentScaleX
+    };
 
     // High Resolution Baked PNG
     const canvas = cropper.getCroppedCanvas({
@@ -595,6 +616,7 @@
     mesh.material.needsUpdate = true;
 
     originalRawImages[type] = null;
+    savedCropperData[type] = null;
     document.getElementById(`upload-${type}`).value = '';
 
     document.getElementById(`group-${type}-active`).style.display = 'none';
@@ -607,6 +629,7 @@
     if (file) {
       const url = URL.createObjectURL(file);
       originalRawImages['front'] = url;
+      savedCropperData['front'] = null; // Clear previous state on new file
       openCropModal('front', url);
     }
   });
@@ -616,6 +639,7 @@
     if (file) {
       const url = URL.createObjectURL(file);
       originalRawImages['back'] = url;
+      savedCropperData['back'] = null; // Clear previous state on new file
       openCropModal('back', url);
     }
   });
