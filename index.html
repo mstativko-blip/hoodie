@@ -21,7 +21,7 @@
       height: 100vh;
     }
 
-    /* Color Selection Panel */
+    /* Palette Panel */
     .color-panel {
       position: absolute;
       top: 24px;
@@ -159,13 +159,13 @@
     .modal-card {
       background: #ffffff;
       width: 90%;
-      max-width: 560px;
+      max-width: 600px;
       border-radius: 20px;
       padding: 24px;
       box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 16px;
     }
     .modal-header {
       display: flex;
@@ -179,15 +179,60 @@
     }
     .crop-container {
       width: 100%;
-      max-height: 380px;
+      height: 360px;
       overflow: hidden;
       border-radius: 12px;
-      background: #000;
+      background: #e4e4e7;
     }
     .crop-container img {
       max-width: 100%;
       display: block;
     }
+
+    /* Editor Toolbar */
+    .editor-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      background: #f4f4f6;
+      padding: 10px 14px;
+      border-radius: 12px;
+    }
+    .tool-group {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .tool-btn {
+      background: #ffffff;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      color: #18181b;
+    }
+    .tool-btn:hover {
+      background: #18181b;
+      color: #ffffff;
+    }
+    .rotate-slider {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #52525b;
+    }
+    .rotate-slider input[type="range"] {
+      width: 100px;
+      cursor: pointer;
+    }
+
     .modal-actions {
       display: flex;
       justify-content: flex-end;
@@ -254,9 +299,24 @@
     <div class="modal-header">
       <div class="modal-title" id="crop-modal-title">Adjust Print Position</div>
     </div>
+    
     <div class="crop-container">
       <img id="crop-target-image" src="" alt="Crop Target">
     </div>
+
+    <!-- Controls Toolbar -->
+    <div class="editor-toolbar">
+      <div class="tool-group">
+        <button class="tool-btn" onclick="resetCropAll()">Original</button>
+        <button class="tool-btn" onclick="flipHorizontal()">Flip H</button>
+        <button class="tool-btn" onclick="resetAngleOnly()">Align (0°)</button>
+      </div>
+      <div class="rotate-slider">
+        <span>Rotate:</span>
+        <input type="range" id="rotate-range" min="-180" max="180" value="0" oninput="handleRotateSlider(this.value)">
+      </div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeCropModal()">Cancel</button>
       <button class="btn btn-action" onclick="applyCroppedPrint()">Apply</button>
@@ -275,6 +335,7 @@
   // Cropper State
   let cropper = null;
   let currentEditingType = null;
+  let currentScaleX = 1;
   const originalRawImages = { front: null, back: null };
 
   function init() {
@@ -406,6 +467,8 @@
   // Pop-up Editor Logic
   function openCropModal(type, imageSrc) {
     currentEditingType = type;
+    currentScaleX = 1;
+    document.getElementById('rotate-range').value = 0;
     document.getElementById('crop-modal-title').innerText = `Adjust ${type === 'front' ? 'Front' : 'Back'} Print`;
     
     const targetImg = document.getElementById('crop-target-image');
@@ -417,17 +480,46 @@
 
     cropper = new Cropper(targetImg, {
       aspectRatio: 1.31, // UV Plane Mesh Ratio
-      viewMode: 1,
+      viewMode: 0,       // Allows cropbox to extend beyond original image dimensions!
       dragMode: 'move',
-      autoCropArea: 0.9,
+      autoCropArea: 0.8,
       restore: false,
       guides: true,
       center: true,
       highlight: false,
       cropBoxMovable: true,
       cropBoxResizable: true,
-      toggleDragModeOnDblclick: false
+      toggleDragModeOnDblclick: false,
+      crop(event) {
+        // Sync slider with manual rotation if triggered externally
+        document.getElementById('rotate-range').value = Math.round(event.detail.rotate);
+      }
     });
+  }
+
+  /* Editor Control Actions */
+  function resetCropAll() {
+    if (!cropper) return;
+    currentScaleX = 1;
+    document.getElementById('rotate-range').value = 0;
+    cropper.reset();
+  }
+
+  function flipHorizontal() {
+    if (!cropper) return;
+    currentScaleX = currentScaleX === 1 ? -1 : 1;
+    cropper.scaleX(currentScaleX);
+  }
+
+  function resetAngleOnly() {
+    if (!cropper) return;
+    document.getElementById('rotate-range').value = 0;
+    cropper.rotateTo(0);
+  }
+
+  function handleRotateSlider(value) {
+    if (!cropper) return;
+    cropper.rotateTo(parseFloat(value));
   }
 
   function closeCropModal() {
@@ -441,15 +533,19 @@
   function applyCroppedPrint() {
     if (!cropper || !currentEditingType) return;
 
+    // High Resolution Baked PNG
     const canvas = cropper.getCroppedCanvas({
       width: 1024,
-      height: 1024 / 1.31
+      height: 1024 / 1.31,
+      fillColor: 'transparent',
+      imageSmoothingEnabled: true,
+      imageSmoothingQuality: 'high'
     });
 
     const croppedDataUrl = canvas.toDataURL('image/png');
     applyPrintToMesh(currentEditingType, croppedDataUrl);
 
-    // Switch buttons
+    // Switch UI Buttons
     document.getElementById(`btn-${currentEditingType}-upload`).style.display = 'none';
     document.getElementById(`group-${currentEditingType}-active`).style.display = 'inline-flex';
 
