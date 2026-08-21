@@ -190,7 +190,8 @@
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(0, 0, 1.8);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    // Alpha: true позволяет рендерить прозрачный фон при сниппете
+    renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -306,14 +307,38 @@
     });
   }
 
-  function takeScreenshot() {
+  // Copy Screenshot on TRANSPARENT background directly to Clipboard
+  async function takeScreenshot() {
+    const btn = document.querySelector('.btn-action');
+
+    // 1. Временно отключаем фон сцены для прозрачности
+    const originalBg = scene.background;
+    scene.background = null;
+
+    // 2. Рендерим кадр
     renderer.render(scene, camera);
-    const dataURL = renderer.domElement.toDataURL('image/png');
-    
-    const link = document.createElement('a');
-    link.download = 'custom-hoodie.png';
-    link.href = dataURL;
-    link.click();
+
+    // 3. Копируем в буфер обмена
+    renderer.domElement.toBlob(async (blob) => {
+      // Возвращаем серый фон на сцену сразу после рендера
+      scene.background = originalBg;
+      renderer.render(scene, camera);
+
+      try {
+        const item = new ClipboardItem({ 'image/png': blob });
+        await navigator.clipboard.write([item]);
+        
+        if (btn) {
+          const originalText = btn.innerText;
+          btn.innerText = 'Copied!';
+          setTimeout(() => {
+            btn.innerText = originalText;
+          }, 1500);
+        }
+      } catch (err) {
+        console.error('Failed to copy screenshot: ', err);
+      }
+    }, 'image/png');
   }
 
   // Load Print with COVER mode & mirror fix
@@ -331,20 +356,17 @@
       const img = texture.image;
       const imgAspect = img.width / img.height;
 
-      // Пропорции UV-плашки
       const meshAspect = 1.31;
 
       let repeatX = 1;
       let repeatY = 1;
 
-      // Алгоритм COVER: заполнение плашки без размыва геометрии
       if (imgAspect > meshAspect) {
         repeatX = meshAspect / imgAspect;
       } else {
         repeatY = imgAspect / meshAspect;
       }
 
-      // Разворот зеркал сзади
       if (type === 'back') {
         texture.repeat.set(-repeatX, repeatY);
         texture.offset.set((1 + repeatX) / 2, (1 - repeatY) / 2);
