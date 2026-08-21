@@ -159,7 +159,7 @@
     .modal-card {
       background: #ffffff;
       width: 90%;
-      max-width: 620px;
+      max-width: 640px;
       border-radius: 20px;
       padding: 24px;
       box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
@@ -177,6 +177,32 @@
       font-weight: 700;
       color: #18181b;
     }
+    
+    /* Mode Selector Tabs */
+    .mode-switch {
+      display: flex;
+      background: #f4f4f6;
+      padding: 4px;
+      border-radius: 10px;
+      gap: 4px;
+    }
+    .mode-btn {
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #71717a;
+      transition: all 0.2s ease;
+    }
+    .mode-btn.active {
+      background: #ffffff;
+      color: #18181b;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+
     .crop-container {
       width: 100%;
       aspect-ratio: 1.31;
@@ -206,16 +232,21 @@
       cursor: grabbing;
     }
 
-    /* Editor Toolbar */
+    /* Editor Controls Panel */
     .editor-toolbar {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: #f4f4f6;
+      padding: 12px 14px;
+      border-radius: 12px;
+    }
+    .toolbar-row {
       display: flex;
       flex-wrap: wrap;
       gap: 12px;
       align-items: center;
       justify-content: space-between;
-      background: #f4f4f6;
-      padding: 10px 14px;
-      border-radius: 12px;
     }
     .tool-group {
       display: flex;
@@ -233,7 +264,7 @@
       transition: all 0.15s ease;
       color: #18181b;
     }
-    .tool-btn:hover {
+    .tool-btn:hover, .tool-btn.active {
       background: #18181b;
       color: #ffffff;
     }
@@ -246,8 +277,44 @@
       color: #52525b;
     }
     .slider-control input[type="range"] {
-      width: 90px;
+      width: 80px;
       cursor: pointer;
+    }
+
+    /* Text Specific Inputs */
+    .text-controls {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      align-items: center;
+    }
+    .text-input {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(0,0,0,0.15);
+      font-size: 13px;
+      outline: none;
+    }
+    .text-input:focus {
+      border-color: #2563eb;
+    }
+    .select-input {
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid rgba(0,0,0,0.15);
+      font-size: 12px;
+      outline: none;
+      background: #ffffff;
+      cursor: pointer;
+    }
+    .color-input {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: none;
     }
 
     .modal-actions {
@@ -284,8 +351,7 @@
 <!-- Controls Panel -->
 <div class="bottom-controls">
   <div id="wrapper-front">
-    <label for="upload-front" class="btn" id="btn-front-upload">Front Print</label>
-    <input type="file" id="upload-front" accept="image/*">
+    <button class="btn" id="btn-front-upload" onclick="openModalForNew('front')">Front Print</button>
     <div id="group-front-active" class="control-group" style="display: none;">
       <button class="btn btn-secondary" onclick="reeditPrint('front')">Edit Front</button>
       <button class="btn btn-reset" onclick="clearPrint('front')">Remove</button>
@@ -293,8 +359,7 @@
   </div>
 
   <div id="wrapper-back">
-    <label for="upload-back" class="btn" id="btn-back-upload">Back Print</label>
-    <input type="file" id="upload-back" accept="image/*">
+    <button class="btn" id="btn-back-upload" onclick="openModalForNew('back')">Back Print</button>
     <div id="group-back-active" class="control-group" style="display: none;">
       <button class="btn btn-secondary" onclick="reeditPrint('back')">Edit Back</button>
       <button class="btn btn-reset" onclick="clearPrint('back')">Remove</button>
@@ -308,7 +373,11 @@
 <div class="modal-overlay" id="crop-modal">
   <div class="modal-card">
     <div class="modal-header">
-      <div class="modal-title" id="crop-modal-title">Adjust Print Position</div>
+      <div class="modal-title" id="crop-modal-title">Adjust Print</div>
+      <div class="mode-switch">
+        <button class="mode-btn active" id="mode-btn-image" onclick="switchMode('image')">Image</button>
+        <button class="mode-btn" id="mode-btn-text" onclick="switchMode('text')">Text</button>
+      </div>
     </div>
     
     <div class="crop-container">
@@ -317,18 +386,42 @@
 
     <!-- Controls Toolbar -->
     <div class="editor-toolbar">
-      <div class="tool-group">
-        <button class="tool-btn" onclick="resetTransform()">Original</button>
-        <button class="tool-btn" onclick="toggleFlipX()">Flip H</button>
-        <button class="tool-btn" onclick="alignZero()">Align (0°)</button>
+      <!-- Text Specific Row -->
+      <div class="text-controls" id="text-controls-row" style="display: none;">
+        <input type="text" id="text-input-val" class="text-input" placeholder="Enter text here..." value="YOUR LOGO" oninput="handleTextChange()">
+        <select id="font-family-select" class="select-input" onchange="handleTextChange()">
+          <option value="sans-serif">Sans-Serif</option>
+          <option value="serif">Serif</option>
+          <option value="monospace">Monospace</option>
+          <option value="cursive">Cursive</option>
+          <option value="Impact">Impact</option>
+        </select>
+        <input type="color" id="text-color-picker" class="color-input" value="#000000" onchange="handleTextChange()">
+        <button class="tool-btn" id="btn-bold" onclick="toggleBold()">B</button>
+        <button class="tool-btn" id="btn-italic" onclick="toggleItalic()">I</button>
       </div>
-      <div class="slider-control">
-        <span>Scale:</span>
-        <input type="range" id="scale-range" min="0.1" max="3" step="0.01" value="1" oninput="handleScaleSlider(this.value)">
+
+      <!-- Image File Upload Row -->
+      <div id="image-controls-row" style="display: flex;">
+        <label for="modal-file-upload" class="tool-btn" style="cursor: pointer;">Choose Image File...</label>
+        <input type="file" id="modal-file-upload" accept="image/*" onchange="handleModalFileSelect(event)">
       </div>
-      <div class="slider-control">
-        <span>Rotate:</span>
-        <input type="range" id="rotate-range" min="-180" max="180" value="0" oninput="handleRotateSlider(this.value)">
+
+      <!-- Common Tools Row -->
+      <div class="toolbar-row">
+        <div class="tool-group">
+          <button class="tool-btn" onclick="resetTransform()">Reset</button>
+          <button class="tool-btn" onclick="toggleFlipX()">Flip H</button>
+          <button class="tool-btn" onclick="alignZero()">Align (0°)</button>
+        </div>
+        <div class="slider-control">
+          <span>Scale:</span>
+          <input type="range" id="scale-range" min="0.1" max="3" step="0.01" value="1" oninput="handleScaleSlider(this.value)">
+        </div>
+        <div class="slider-control">
+          <span>Rotate:</span>
+          <input type="range" id="rotate-range" min="-180" max="180" value="0" oninput="handleRotateSlider(this.value)">
+        </div>
       </div>
     </div>
 
@@ -351,8 +444,8 @@
   let currentEditingType = null;
   const loadedImageObjects = { front: null, back: null };
   const printTransformState = {
-    front: { x: 512, y: 390.5, scale: 1, rotate: 0, flipX: 1 },
-    back: { x: 512, y: 390.5, scale: 1, rotate: 0, flipX: 1 }
+    front: { mode: 'image', x: 512, y: 390.5, scale: 1, rotate: 0, flipX: 1, text: 'YOUR LOGO', font: 'sans-serif', color: '#000000', bold: false, italic: false },
+    back: { mode: 'image', x: 512, y: 390.5, scale: 1, rotate: 0, flipX: 1, text: 'YOUR LOGO', font: 'sans-serif', color: '#000000', bold: false, italic: false }
   };
 
   // Canvas Editor Context
@@ -519,26 +612,90 @@
     });
   }
 
-  function openCropModal(type, imgObj) {
+  function openModalForNew(type) {
     currentEditingType = type;
-    loadedImageObjects[type] = imgObj;
-
     document.getElementById('crop-modal-title').innerText = `Adjust ${type === 'front' ? 'Front' : 'Back'} Print`;
     document.getElementById('crop-modal').style.display = 'flex';
+    
+    // Если ничего не было закинуто — ставим базовый текстовый режим или сброс
+    if (!loadedImageObjects[type] && printTransformState[type].mode === 'image') {
+      switchMode('text');
+    } else {
+      syncModalUI();
+      drawEditorCanvas();
+    }
+  }
 
-    const state = printTransformState[type];
-    document.getElementById('scale-range').value = state.scale;
-    document.getElementById('rotate-range').value = state.rotate;
+  function switchMode(mode) {
+    if (!currentEditingType) return;
+    const state = printTransformState[currentEditingType];
+    state.mode = mode;
+
+    document.getElementById('mode-btn-image').classList.toggle('active', mode === 'image');
+    document.getElementById('mode-btn-text').classList.toggle('active', mode === 'text');
+
+    document.getElementById('image-controls-row').style.display = (mode === 'image') ? 'flex' : 'none';
+    document.getElementById('text-controls-row').style.display = (mode === 'text') ? 'flex' : 'none';
 
     drawEditorCanvas();
   }
 
-  function drawEditorCanvas() {
-    if (!currentEditingType || !loadedImageObjects[currentEditingType]) return;
-
-    const img = loadedImageObjects[currentEditingType];
+  function syncModalUI() {
     const state = printTransformState[currentEditingType];
+    switchMode(state.mode);
 
+    document.getElementById('scale-range').value = state.scale;
+    document.getElementById('rotate-range').value = state.rotate;
+    document.getElementById('text-input-val').value = state.text;
+    document.getElementById('font-family-select').value = state.font;
+    document.getElementById('text-color-picker').value = state.color;
+
+    document.getElementById('btn-bold').classList.toggle('active', state.bold);
+    document.getElementById('btn-italic').classList.toggle('active', state.italic);
+  }
+
+  function handleTextChange() {
+    if (!currentEditingType) return;
+    const state = printTransformState[currentEditingType];
+    state.text = document.getElementById('text-input-val').value;
+    state.font = document.getElementById('font-family-select').value;
+    state.color = document.getElementById('text-color-picker').value;
+    drawEditorCanvas();
+  }
+
+  function toggleBold() {
+    if (!currentEditingType) return;
+    const state = printTransformState[currentEditingType];
+    state.bold = !state.bold;
+    document.getElementById('btn-bold').classList.toggle('active', state.bold);
+    drawEditorCanvas();
+  }
+
+  function toggleItalic() {
+    if (!currentEditingType) return;
+    const state = printTransformState[currentEditingType];
+    state.italic = !state.italic;
+    document.getElementById('btn-italic').classList.toggle('active', state.italic);
+    drawEditorCanvas();
+  }
+
+  function handleModalFileSelect(e) {
+    const file = e.target.files[0];
+    if (file && currentEditingType) {
+      const img = new Image();
+      img.onload = () => {
+        loadedImageObjects[currentEditingType] = img;
+        switchMode('image');
+        resetTransform();
+      };
+      img.src = URL.createObjectURL(file);
+    }
+  }
+
+  function drawEditorCanvas() {
+    if (!currentEditingType) return;
+
+    const state = printTransformState[currentEditingType];
     editorCtx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
 
     editorCtx.save();
@@ -546,22 +703,36 @@
     editorCtx.rotate((state.rotate * Math.PI) / 180);
     editorCtx.scale(state.scale * state.flipX, state.scale);
 
-    // Центрируем отрисовку картинки в перенесенной точке
-    editorCtx.drawImage(img, -img.width / 2, -img.height / 2);
+    if (state.mode === 'image' && loadedImageObjects[currentEditingType]) {
+      const img = loadedImageObjects[currentEditingType];
+      editorCtx.drawImage(img, -img.width / 2, -img.height / 2);
+    } else if (state.mode === 'text' && state.text.trim() !== '') {
+      const fontStyle = `${state.italic ? 'italic ' : ''}${state.bold ? 'bold ' : ''}100px ${state.font}`;
+      editorCtx.font = fontStyle;
+      editorCtx.fillStyle = state.color;
+      editorCtx.textAlign = 'center';
+      editorCtx.textBaseline = 'middle';
+      editorCtx.fillText(state.text, 0, 0);
+    }
+
     editorCtx.restore();
   }
 
   function resetTransform() {
-    if (!currentEditingType || !loadedImageObjects[currentEditingType]) return;
-    const img = loadedImageObjects[currentEditingType];
+    if (!currentEditingType) return;
     const state = printTransformState[currentEditingType];
 
     state.x = editorCanvas.width / 2;
     state.y = editorCanvas.height / 2;
     state.rotate = 0;
     state.flipX = 1;
-    // Подгоняем масштаб, чтобы картинка красиво встала в рамку по умолчанию
-    state.scale = Math.min((editorCanvas.width * 0.7) / img.width, (editorCanvas.height * 0.7) / img.height);
+
+    if (state.mode === 'image' && loadedImageObjects[currentEditingType]) {
+      const img = loadedImageObjects[currentEditingType];
+      state.scale = Math.min((editorCanvas.width * 0.7) / img.width, (editorCanvas.height * 0.7) / img.height);
+    } else {
+      state.scale = 1;
+    }
 
     document.getElementById('scale-range').value = state.scale;
     document.getElementById('rotate-range').value = 0;
@@ -610,9 +781,11 @@
   }
 
   function reeditPrint(type) {
-    if (loadedImageObjects[type]) {
-      openCropModal(type, loadedImageObjects[type]);
-    }
+    currentEditingType = type;
+    document.getElementById('crop-modal-title').innerText = `Adjust ${type === 'front' ? 'Front' : 'Back'} Print`;
+    document.getElementById('crop-modal').style.display = 'flex';
+    syncModalUI();
+    drawEditorCanvas();
   }
 
   function applyPrintToMesh(type, imageSrc) {
@@ -648,28 +821,11 @@
     mesh.material.needsUpdate = true;
 
     loadedImageObjects[type] = null;
-    printTransformState[type] = { x: 512, y: 390.5, scale: 1, rotate: 0, flipX: 1 };
-    document.getElementById(`upload-${type}`).value = '';
-
+    printTransformState[type] = { mode: 'image', x: 512, y: 390.5, scale: 1, rotate: 0, flipX: 1, text: 'YOUR LOGO', font: 'sans-serif', color: '#000000', bold: false, italic: false };
+    
     document.getElementById(`group-${type}-active`).style.display = 'none';
     document.getElementById(`btn-${type}-upload`).style.display = 'inline-flex';
   }
-
-  function handleFileSelect(type, e) {
-    const file = e.target.files[0];
-    if (file) {
-      const img = new Image();
-      img.onload = () => {
-        loadedImageObjects[type] = img;
-        resetTransform(); // Автомасштаб при первом вбросе
-        openCropModal(type, img);
-      };
-      img.src = URL.createObjectURL(file);
-    }
-  }
-
-  document.getElementById('upload-front').addEventListener('change', (e) => handleFileSelect('front', e));
-  document.getElementById('upload-back').addEventListener('change', (e) => handleFileSelect('back', e));
 
   async function takeScreenshot() {
     const btn = document.querySelector('.btn-action');
