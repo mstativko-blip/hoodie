@@ -77,6 +77,10 @@
       box-shadow: 0 15px 30px rgba(0, 0, 0, 0.08);
       z-index: 20;
     }
+    .control-group {
+      display: flex;
+      gap: 6px;
+    }
     .btn {
       background: #18181b;
       color: #ffffff;
@@ -90,16 +94,25 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 130px;
+      min-width: 120px;
     }
     .btn:hover {
       background: #27272a;
       transform: translateY(-1px);
     }
+    .btn-secondary {
+      background: rgba(24, 24, 27, 0.08);
+      color: #18181b;
+      min-width: auto;
+    }
+    .btn-secondary:hover {
+      background: rgba(24, 24, 27, 0.15);
+    }
     .btn-reset {
       background: rgba(239, 68, 68, 0.12);
       color: #dc2626;
       border: 1px solid rgba(239, 68, 68, 0.25);
+      min-width: auto;
     }
     .btn-reset:hover {
       background: rgba(239, 68, 68, 0.2);
@@ -128,6 +141,58 @@
       transition: opacity 0.4s ease;
       font-weight: 500;
     }
+
+    /* Pop-up Modal Window */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-card {
+      background: #ffffff;
+      width: 90%;
+      max-width: 560px;
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #18181b;
+    }
+    .crop-container {
+      width: 100%;
+      max-height: 380px;
+      overflow: hidden;
+      border-radius: 12px;
+      background: #000;
+    }
+    .crop-container img {
+      max-width: 100%;
+      display: block;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
   </style>
 
   <!-- Three.js + Loaders -->
@@ -135,6 +200,10 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+
+  <!-- Cropper.js CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 </head>
 <body>
 
@@ -156,21 +225,43 @@
 
 <!-- Controls Panel -->
 <div class="bottom-controls">
-  <!-- Front Button -->
+  <!-- Front Controls -->
   <div id="wrapper-front">
-    <label for="upload-front" class="btn" id="btn-front-label">Front Print</label>
+    <label for="upload-front" class="btn" id="btn-front-upload">Front Print</label>
     <input type="file" id="upload-front" accept="image/*">
-    <button class="btn btn-reset" id="btn-front-reset" style="display: none;" onclick="clearPrint('front')">Reset Front</button>
+    <div id="group-front-active" class="control-group" style="display: none;">
+      <button class="btn btn-secondary" onclick="reeditPrint('front')">Edit Front</button>
+      <button class="btn btn-reset" onclick="clearPrint('front')">Remove</button>
+    </div>
   </div>
 
-  <!-- Back Button -->
+  <!-- Back Controls -->
   <div id="wrapper-back">
-    <label for="upload-back" class="btn" id="btn-back-label">Back Print</label>
+    <label for="upload-back" class="btn" id="btn-back-upload">Back Print</label>
     <input type="file" id="upload-back" accept="image/*">
-    <button class="btn btn-reset" id="btn-back-reset" style="display: none;" onclick="clearPrint('back')">Reset Back</button>
+    <div id="group-back-active" class="control-group" style="display: none;">
+      <button class="btn btn-secondary" onclick="reeditPrint('back')">Edit Back</button>
+      <button class="btn btn-reset" onclick="clearPrint('back')">Remove</button>
+    </div>
   </div>
 
   <button class="btn btn-action" onclick="takeScreenshot()">Take Screenshot</button>
+</div>
+
+<!-- Crop Editor Pop-up Modal -->
+<div class="modal-overlay" id="crop-modal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title" id="crop-modal-title">Adjust Print Position</div>
+    </div>
+    <div class="crop-container">
+      <img id="crop-target-image" src="" alt="Crop Target">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeCropModal()">Cancel</button>
+      <button class="btn btn-action" onclick="applyCroppedPrint()">Apply</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -181,6 +272,11 @@
   let fabricAOMap = null;
   const textureLoader = new THREE.TextureLoader();
 
+  // Cropper State
+  let cropper = null;
+  let currentEditingType = null;
+  const originalRawImages = { front: null, back: null };
+
   function init() {
     const container = document.getElementById('canvas-container');
 
@@ -190,7 +286,6 @@
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(0, 0, 1.8);
 
-    // Alpha: true позволяет рендерить прозрачный фон при сниппете
     renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -198,7 +293,7 @@
     renderer.toneMappingExposure = 1.05;
     container.appendChild(renderer.domElement);
 
-    // Soft Studio Lighting
+    // Studio Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.95);
     scene.add(ambientLight);
 
@@ -231,7 +326,7 @@
       }
     }
 
-    // Load Main Hoodie Mesh
+    // Load Main Hoodie
     gltfLoader.load('hoodie-v1.glb', (gltf) => {
       mainHoodieMesh = gltf.scene;
       mainHoodieMesh.traverse((child) => {
@@ -268,7 +363,7 @@
       return mat;
     }
 
-    // Front Mesh
+    // Load Front Mesh
     gltfLoader.load('front_print.glb', (gltf) => {
       const mesh = gltf.scene;
       mesh.traverse((child) => {
@@ -281,7 +376,7 @@
       checkAllLoaded();
     });
 
-    // Back Mesh
+    // Load Back Mesh
     gltfLoader.load('back_print.glb', (gltf) => {
       const mesh = gltf.scene;
       mesh.traverse((child) => {
@@ -298,6 +393,7 @@
     animate();
   }
 
+  // Change Color
   function changeHoodieColor(colorHex) {
     if (!mainHoodieMesh) return;
     mainHoodieMesh.traverse((child) => {
@@ -307,20 +403,136 @@
     });
   }
 
-  // Copy Screenshot on TRANSPARENT background directly to Clipboard
+  // Pop-up Editor Logic
+  function openCropModal(type, imageSrc) {
+    currentEditingType = type;
+    document.getElementById('crop-modal-title').innerText = `Adjust ${type === 'front' ? 'Front' : 'Back'} Print`;
+    
+    const targetImg = document.getElementById('crop-target-image');
+    targetImg.src = imageSrc;
+
+    document.getElementById('crop-modal').style.display = 'flex';
+
+    if (cropper) cropper.destroy();
+
+    cropper = new Cropper(targetImg, {
+      aspectRatio: 1.31, // UV Plane Mesh Ratio
+      viewMode: 1,
+      dragMode: 'move',
+      autoCropArea: 0.9,
+      restore: false,
+      guides: true,
+      center: true,
+      highlight: false,
+      cropBoxMovable: true,
+      cropBoxResizable: true,
+      toggleDragModeOnDblclick: false
+    });
+  }
+
+  function closeCropModal() {
+    document.getElementById('crop-modal').style.display = 'none';
+    if (cropper) {
+      cropper.destroy();
+      cropper = null;
+    }
+  }
+
+  function applyCroppedPrint() {
+    if (!cropper || !currentEditingType) return;
+
+    const canvas = cropper.getCroppedCanvas({
+      width: 1024,
+      height: 1024 / 1.31
+    });
+
+    const croppedDataUrl = canvas.toDataURL('image/png');
+    applyPrintToMesh(currentEditingType, croppedDataUrl);
+
+    // Switch buttons
+    document.getElementById(`btn-${currentEditingType}-upload`).style.display = 'none';
+    document.getElementById(`group-${currentEditingType}-active`).style.display = 'inline-flex';
+
+    closeCropModal();
+  }
+
+  function reeditPrint(type) {
+    if (originalRawImages[type]) {
+      openCropModal(type, originalRawImages[type]);
+    }
+  }
+
+  // Apply Texture to 3D Mesh
+  function applyPrintToMesh(type, imageSrc) {
+    const mesh = printMeshes[type];
+    if (!mesh) return;
+
+    textureLoader.load(imageSrc, (texture) => {
+      texture.encoding = THREE.sRGBEncoding;
+      texture.flipY = false;
+
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+
+      // Unmirror Back
+      if (type === 'back') {
+        texture.repeat.set(-1, 1);
+        texture.offset.set(1, 0);
+      } else {
+        texture.repeat.set(1, 1);
+        texture.offset.set(0, 0);
+      }
+
+      mesh.material.map = texture;
+      mesh.material.opacity = 1.0;
+      mesh.material.needsUpdate = true;
+    });
+  }
+
+  // Clear Print
+  function clearPrint(type) {
+    const mesh = printMeshes[type];
+    if (!mesh) return;
+
+    mesh.material.opacity = 0.0;
+    mesh.material.map = null;
+    mesh.material.needsUpdate = true;
+
+    originalRawImages[type] = null;
+    document.getElementById(`upload-${type}`).value = '';
+
+    document.getElementById(`group-${type}-active`).style.display = 'none';
+    document.getElementById(`btn-${type}-upload`).style.display = 'inline-flex';
+  }
+
+  // File Inputs
+  document.getElementById('upload-front').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const url = URL.createObjectURL(file);
+      originalRawImages['front'] = url;
+      openCropModal('front', url);
+    }
+  });
+
+  document.getElementById('upload-back').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const url = URL.createObjectURL(file);
+      originalRawImages['back'] = url;
+      openCropModal('back', url);
+    }
+  });
+
+  // Screenshot directly to Clipboard (Transparent BG)
   async function takeScreenshot() {
     const btn = document.querySelector('.btn-action');
-
-    // 1. Временно отключаем фон сцены для прозрачности
     const originalBg = scene.background;
     scene.background = null;
 
-    // 2. Рендерим кадр
     renderer.render(scene, camera);
 
-    // 3. Копируем в буфер обмена
     renderer.domElement.toBlob(async (blob) => {
-      // Возвращаем серый фон на сцену сразу после рендера
       scene.background = originalBg;
       renderer.render(scene, camera);
 
@@ -340,73 +552,6 @@
       }
     }, 'image/png');
   }
-
-  // Load Print with COVER mode & mirror fix
-  function applyPrint(type, imageSrc) {
-    const mesh = printMeshes[type];
-    if (!mesh) return;
-
-    textureLoader.load(imageSrc, (texture) => {
-      texture.encoding = THREE.sRGBEncoding;
-      texture.flipY = false;
-
-      texture.wrapS = THREE.ClampToEdgeWrapping;
-      texture.wrapT = THREE.ClampToEdgeWrapping;
-
-      const img = texture.image;
-      const imgAspect = img.width / img.height;
-
-      const meshAspect = 1.31;
-
-      let repeatX = 1;
-      let repeatY = 1;
-
-      if (imgAspect > meshAspect) {
-        repeatX = meshAspect / imgAspect;
-      } else {
-        repeatY = imgAspect / meshAspect;
-      }
-
-      if (type === 'back') {
-        texture.repeat.set(-repeatX, repeatY);
-        texture.offset.set((1 + repeatX) / 2, (1 - repeatY) / 2);
-      } else {
-        texture.repeat.set(repeatX, repeatY);
-        texture.offset.set((1 - repeatX) / 2, (1 - repeatY) / 2);
-      }
-
-      mesh.material.map = texture;
-      mesh.material.opacity = 1.0;
-      mesh.material.needsUpdate = true;
-
-      document.getElementById(`btn-${type}-label`).style.display = 'none';
-      document.getElementById(`btn-${type}-reset`).style.display = 'inline-flex';
-    });
-  }
-
-  function clearPrint(type) {
-    const mesh = printMeshes[type];
-    if (!mesh) return;
-
-    mesh.material.opacity = 0.0;
-    mesh.material.map = null;
-    mesh.material.needsUpdate = true;
-
-    document.getElementById(`upload-${type}`).value = '';
-
-    document.getElementById(`btn-${type}-reset`).style.display = 'none';
-    document.getElementById(`btn-${type}-label`).style.display = 'inline-flex';
-  }
-
-  document.getElementById('upload-front').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) applyPrint('front', URL.createObjectURL(file));
-  });
-
-  document.getElementById('upload-back').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) applyPrint('back', URL.createObjectURL(file));
-  });
 
   function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
