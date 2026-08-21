@@ -1,3 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hoodie 3D Configurator</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      overflow: hidden;
+      background-color: #f4f4f6;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #18181b;
+    }
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* Palette Panel */
+    .color-panel {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      padding: 14px 18px;
+      border-radius: 16px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .color-panel-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(0, 0, 0, 0.5);
+      font-weight: 700;
+    }
+    .color-picker {
+      display: flex;
+      gap: 10px;
+    }
+    .color-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .color-btn:hover {
+      transform: scale(1.15);
+      border-color: #000000;
+    }
+
+    /* Bottom Control Bar */
+    .bottom-controls {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      padding: 12px 20px;
+      border-radius: 16px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      box-shadow: 0 15px 30px rgba(0, 0, 0, 0.08);
+      z-index: 20;
+    }
+    .control-group {
+      display: flex;
+      gap: 6px;
+    }
+    .btn {
+      background: #18181b;
+      color: #ffffff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      border: none;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 120px;
+    }
+    .btn:hover {
+      background: #27272a;
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: rgba(24, 24, 27, 0.08);
+      color: #18181b;
+      min-width: auto;
+    }
+    .btn-secondary:hover {
+      background: rgba(24, 24, 27, 0.15);
+    }
+    .btn-reset {
+      background: rgba(239, 68, 68, 0.12);
+      color: #dc2626;
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      min-width: auto;
+    }
+    .btn-reset:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: #991b1b;
+    }
+    .btn-action {
+      background: #2563eb;
+      color: #ffffff;
+      min-width: auto;
+    }
+    .btn-action:hover {
+      background: #1d4ed8;
+    }
+    input[type="file"] {
+      display: none;
+    }
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 15px;
+      letter-spacing: 0.05em;
+      color: rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+      font-weight: 500;
+    }
+
+    /* Pop-up Modal Window */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-card {
+      background: #ffffff;
+      width: 90%;
+      max-width: 600px;
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #18181b;
+    }
+    .crop-container {
+      width: 100%;
+      height: 380px;
+      overflow: hidden;
+      border-radius: 12px;
+      background: #e4e4e7;
+    }
+    .crop-container img {
+      max-width: 100%;
+      display: block;
+    }
+
+    /* Custom Cropper Styles */
+    .cropper-line, .cropper-point {
+      display: none !important;
+    }
+    .cropper-view-box {
+      outline: 2px solid #2563eb !important;
+      outline-color: rgba(37, 99, 235, 0.8) !important;
+    }
+
+    /* Editor Toolbar */
+    .editor-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      background: #f4f4f6;
+      padding: 10px 14px;
+      border-radius: 12px;
+    }
+    .tool-group {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .tool-btn {
+      background: #ffffff;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      color: #18181b;
+    }
+    .tool-btn:hover {
+      background: #18181b;
+      color: #ffffff;
+    }
+    .rotate-slider {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #52525b;
+    }
+    .rotate-slider input[type="range"] {
+      width: 100px;
+      cursor: pointer;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+  </style>
+
+  <!-- Three.js + Loaders -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+
+  <!-- Cropper.js CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+</head>
+<body>
+
+<div id="loading">Loading 3D Model...</div>
+<div id="canvas-container"></div>
+
+<!-- Palette Panel -->
+<div class="color-panel">
+  <div class="color-panel-title">Hoodie Color</div>
+  <div class="color-picker">
+    <div class="color-btn" style="background: #F3F3F0;" title="Off-White" onclick="changeHoodieColor(0xF3F3F0)"></div>
+    <div class="color-btn" style="background: #1A1A1D;" title="Charcoal" onclick="changeHoodieColor(0x1A1A1D)"></div>
+    <div class="color-btn" style="background: #5A5D64;" title="Heather Gray" onclick="changeHoodieColor(0x5A5D64)"></div>
+    <div class="color-btn" style="background: #8B2626;" title="Muted Red" onclick="changeHoodieColor(0x8B2626)"></div>
+    <div class="color-btn" style="background: #2D4A3E;" title="Sage Green" onclick="changeHoodieColor(0x2D4A3E)"></div>
+    <div class="color-btn" style="background: #4A254B;" title="Deep Plum" onclick="changeHoodieColor(0x4A254B)"></div>
+  </div>
+</div>
+
+<!-- Controls Panel -->
+<div class="bottom-controls">
+  <!-- Front Controls -->
+  <div id="wrapper-front">
+    <label for="upload-front" class="btn" id="btn-front-upload">Front Print</label>
+    <input type="file" id="upload-front" accept="image/*">
+    <div id="group-front-active" class="control-group" style="display: none;">
+      <button class="btn btn-secondary" onclick="reeditPrint('front')">Edit Front</button>
+      <button class="btn btn-reset" onclick="clearPrint('front')">Remove</button>
+    </div>
+  </div>
+
+  <!-- Back Controls -->
+  <div id="wrapper-back">
+    <label for="upload-back" class="btn" id="btn-back-upload">Back Print</label>
+    <input type="file" id="upload-back" accept="image/*">
+    <div id="group-back-active" class="control-group" style="display: none;">
+      <button class="btn btn-secondary" onclick="reeditPrint('back')">Edit Back</button>
+      <button class="btn btn-reset" onclick="clearPrint('back')">Remove</button>
+    </div>
+  </div>
+
+  <button class="btn btn-action" onclick="takeScreenshot()">Take Screenshot</button>
+</div>
+
+<!-- Crop Editor Pop-up Modal -->
+<div class="modal-overlay" id="crop-modal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title" id="crop-modal-title">Adjust Print Position</div>
+    </div>
+    
+    <div class="crop-container">
+      <img id="crop-target-image" src="" alt="Crop Target">
+    </div>
+
+    <!-- Controls Toolbar -->
+    <div class="editor-toolbar">
+      <div class="tool-group">
+        <button class="tool-btn" onclick="resetCropAll()">Original</button>
+        <button class="tool-btn" onclick="flipHorizontal()">Flip H</button>
+        <button class="tool-btn" onclick="resetAngleOnly()">Align (0°)</button>
+      </div>
+      <div class="rotate-slider">
+        <span>Rotate:</span>
+        <input type="range" id="rotate-range" min="-180" max="180" value="0" oninput="handleRotateSlider(this.value)">
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeCropModal()">Cancel</button>
+      <button class="btn btn-action" onclick="applyCroppedPrint()">Apply</button>
+    </div>
+  </div>
+</div>
+
 <script>
   let scene, camera, renderer, controls;
   const printMeshes = {};
@@ -137,31 +472,31 @@
     });
   }
 
-  // Open Crop Modal
+  // Open Crop Modal safely with image loading sync
   function openCropModal(type, imageSrc) {
     currentEditingType = type;
     document.getElementById('crop-modal-title').innerText = `Adjust ${type === 'front' ? 'Front' : 'Back'} Print`;
     
-    const targetImg = document.getElementById('crop-target-image');
-    targetImg.src = imageSrc;
+    const modal = document.getElementById('crop-modal');
+    modal.style.display = 'flex';
 
-    document.getElementById('crop-modal').style.display = 'flex';
+    const targetImg = document.getElementById('crop-target-image');
 
     if (cropper) {
       cropper.destroy();
       cropper = null;
     }
 
-    // Небольшая задержка, чтобы модалка успела отрисовать честные размеры
-    setTimeout(() => {
+    targetImg.onload = function() {
+      if (cropper) return; // Prevent double-init
       cropper = new Cropper(targetImg, {
         aspectRatio: 1.31,
-        viewMode: 1,              // Картинка строго в пределах холста
-        dragMode: 'move',         // Перетаскиваем принт
-        cropBoxMovable: false,    // Рамка всегда по центру
-        cropBoxResizable: false,  // Размер рамки фиксирован
+        viewMode: 1,
+        dragMode: 'move',
+        cropBoxMovable: false,
+        cropBoxResizable: false,
         toggleDragModeOnDblclick: false,
-        autoCropArea: 0.9,        // Рамка занимает 90% контейнера
+        autoCropArea: 0.75, // Keeps image initially inside frame so nothing gets cut off
         ready() {
           currentScaleX = 1;
           document.getElementById('rotate-range').value = 0;
@@ -170,7 +505,12 @@
           document.getElementById('rotate-range').value = Math.round(event.detail.rotate);
         }
       });
-    }, 50);
+    };
+
+    targetImg.src = imageSrc;
+    if (targetImg.complete && targetImg.src === imageSrc) {
+      targetImg.onload();
+    }
   }
 
   /* Editor Actions */
@@ -209,7 +549,6 @@
   function applyCroppedPrint() {
     if (!cropper || !currentEditingType) return;
 
-    // Забираем точный результат внутри синей рамки без обрезки
     const croppedCanvas = cropper.getCroppedCanvas({
       width: 1024,
       height: Math.round(1024 / 1.31),
@@ -332,3 +671,5 @@
 
   init();
 </script>
+</body>
+</html>
