@@ -20,32 +20,37 @@
       width: 100vw;
       height: 100vh;
     }
-    
-    .controls-wrapper {
+
+    /* Панель выбора цвета (Левый верхний угол) */
+    .color-panel {
       position: absolute;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
+      top: 24px;
+      left: 24px;
+      background: rgba(24, 24, 27, 0.85);
+      backdrop-filter: blur(12px);
+      padding: 14px 18px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+      z-index: 20;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 12px;
-      z-index: 10;
+      gap: 10px;
     }
-
-    /* Палитра реалистичных сложный оттенков */
+    .color-panel-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 600;
+    }
     .color-picker {
       display: flex;
       gap: 10px;
-      background: rgba(24, 24, 27, 0.85);
-      backdrop-filter: blur(12px);
-      padding: 10px 16px;
-      border-radius: 30px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
     }
     .color-btn {
-      width: 26px;
-      height: 26px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       border: 2px solid rgba(255, 255, 255, 0.2);
       cursor: pointer;
@@ -56,20 +61,26 @@
       border-color: #ffffff;
     }
 
-    .controls {
+    /* Нижняя панель элементов */
+    .bottom-controls {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
       display: flex;
-      gap: 10px;
+      gap: 12px;
       background: rgba(24, 24, 27, 0.85);
       backdrop-filter: blur(12px);
       padding: 12px 20px;
-      border-radius: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
       box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+      z-index: 20;
     }
     .btn {
       background: #ffffff;
       color: #000000;
-      padding: 10px 16px;
+      padding: 10px 18px;
       border-radius: 8px;
       cursor: pointer;
       font-weight: 600;
@@ -79,22 +90,25 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      min-width: 140px;
     }
     .btn:hover {
       background: #e4e4e7;
       transform: translateY(-1px);
     }
-    .btn-secondary {
-      background: rgba(255, 255, 255, 0.1);
-      color: #ffffff;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+    .btn-reset {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.4);
     }
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.2);
+    .btn-reset:hover {
+      background: rgba(239, 68, 68, 0.3);
+      color: #ffffff;
     }
     .btn-action {
       background: #2563eb;
       color: #ffffff;
+      min-width: auto;
     }
     .btn-action:hover {
       background: #1d4ed8;
@@ -126,28 +140,36 @@
 <div id="loading">Загрузка 3D модели...</div>
 <div id="canvas-container"></div>
 
-<div class="controls-wrapper">
-  <!-- Палитра со сложными сложными тонами -->
+<!-- Палитра выбора цвета -->
+<div class="color-panel">
+  <div class="color-panel-title">Цвет худи</div>
   <div class="color-picker">
     <div class="color-btn" style="background: #F3F3F0;" title="Молочный" onclick="changeHoodieColor(0xF3F3F0)"></div>
     <div class="color-btn" style="background: #1A1A1D;" title="Графит" onclick="changeHoodieColor(0x1A1A1D)"></div>
     <div class="color-btn" style="background: #5A5D64;" title="Меланж" onclick="changeHoodieColor(0x5A5D64)"></div>
-    <div class="color-btn" style="background: #8B2626;" title="Приглушенный красный" onclick="changeHoodieColor(0x8B2626)"></div>
-    <div class="color-btn" style="background: #2D4A3E;" title="Оливково-зеленый" onclick="changeHoodieColor(0x2D4A3E)"></div>
-    <div class="color-btn" style="background: #4A254B;" title="Темно-сливовый" onclick="changeHoodieColor(0x4A254B)"></div>
+    <div class="color-btn" style="background: #8B2626;" title="Бордо" onclick="changeHoodieColor(0x8B2626)"></div>
+    <div class="color-btn" style="background: #2D4A3E;" title="Оливковый" onclick="changeHoodieColor(0x2D4A3E)"></div>
+    <div class="color-btn" style="background: #4A254B;" title="Сливовый" onclick="changeHoodieColor(0x4A254B)"></div>
   </div>
+</div>
 
-  <div class="controls">
-    <label for="upload-front" class="btn">Принт спереди</label>
+<!-- Нижняя панель динамических кнопок -->
+<div class="bottom-controls">
+  <!-- Переключаемая кнопка спереди -->
+  <div id="wrapper-front">
+    <label for="upload-front" class="btn" id="btn-front-label">Принт спереди</label>
     <input type="file" id="upload-front" accept="image/*">
-    <button class="btn btn-secondary" onclick="clearPrint('front')">Сбросить</button>
-
-    <label for="upload-back" class="btn">Принт сзади</label>
-    <input type="file" id="upload-back" accept="image/*">
-    <button class="btn btn-secondary" onclick="clearPrint('back')">Сбросить</button>
-
-    <button class="btn btn-action" onclick="takeScreenshot()">Сделать скриншот</button>
+    <button class="btn btn-reset" id="btn-front-reset" style="display: none;" onclick="clearPrint('front')">Сбросить спереди</button>
   </div>
+
+  <!-- Переключаемая кнопка сзади -->
+  <div id="wrapper-back">
+    <label for="upload-back" class="btn" id="btn-back-label">Принт сзади</label>
+    <input type="file" id="upload-back" accept="image/*">
+    <button class="btn btn-reset" id="btn-back-reset" style="display: none;" onclick="clearPrint('back')">Сбросить сзади</button>
+  </div>
+
+  <button class="btn btn-action" onclick="takeScreenshot()">Сделать скриншот</button>
 </div>
 
 <script>
@@ -172,7 +194,6 @@
     renderer.toneMappingExposure = 1.0;
     container.appendChild(renderer.domElement);
 
-    // Освещение для глубокой проработки складок
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
     scene.add(ambientLight);
 
@@ -218,17 +239,13 @@
 
     gltfLoader.load('hoodie-v1.glb', (gltf) => {
       mainHoodieMesh = gltf.scene;
-      
-      // Выставляем матовость ткани, чтобы убрать «пластиковый» глянец
       mainHoodieMesh.traverse((child) => {
         if (child.isMesh) {
           child.material.roughness = 0.85;
           child.material.metalness = 0.05;
-          // Устанавливаем стартовый молочный цвет вместо жесткого белого
           child.material.color.setHex(0xF3F3F0);
         }
       });
-
       scene.add(mainHoodieMesh);
       checkAllLoaded();
     });
@@ -280,6 +297,7 @@
     link.click();
   }
 
+  // Загрузка принта с алгоритмом Fit по ширине
   function applyPrint(type, imageSrc) {
     const mesh = printMeshes[type];
     if (!mesh) return;
@@ -288,12 +306,27 @@
       texture.encoding = THREE.sRGBEncoding;
       texture.flipY = false;
 
+      const img = texture.image;
+      const imgAspect = img.width / img.height;
+
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+
+      // Растягиваем на всю ширину и кадрируем высоту по центру
+      texture.repeat.set(1, 1 / imgAspect);
+      texture.offset.set(0, (1 - 1 / imgAspect) / 2);
+
       mesh.material.map = texture;
       mesh.material.opacity = 1.0;
       mesh.material.needsUpdate = true;
+
+      // Переключаем кнопку на "Сбросить"
+      document.getElementById(`btn-${type}-label`).style.display = 'none';
+      document.getElementById(`btn-${type}-reset`).style.display = 'inline-flex';
     });
   }
 
+  // Сброс принта
   function clearPrint(type) {
     const mesh = printMeshes[type];
     if (!mesh) return;
@@ -301,6 +334,13 @@
     mesh.material.opacity = 0.0;
     mesh.material.map = null;
     mesh.material.needsUpdate = true;
+
+    // Очищаем инпут файла
+    document.getElementById(`upload-${type}`).value = '';
+
+    // Переключаем кнопку обратно на "Загрузить"
+    document.getElementById(`btn-${type}-reset`).style.display = 'none';
+    document.getElementById(`btn-${type}-label`).style.display = 'inline-flex';
   }
 
   document.getElementById('upload-front').addEventListener('change', (e) => {
