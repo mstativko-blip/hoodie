@@ -554,16 +554,34 @@
       scaleX: currentScaleX
     };
 
-    // High Resolution Baked PNG
-    const canvas = cropper.getCroppedCanvas({
-      width: 1024,
-      height: 1024 / 1.31,
-      fillColor: 'transparent',
-      imageSmoothingEnabled: true,
-      imageSmoothingQuality: 'high'
+    const canvasData = cropper.getCanvasData();
+    const cropBoxData = cropper.getCropBoxData();
+
+    const outputCanvas = document.createElement('canvas');
+    const targetWidth = 1024;
+    const targetHeight = Math.round(1024 / 1.31);
+    outputCanvas.width = targetWidth;
+    outputCanvas.height = targetHeight;
+
+    const ctx = outputCanvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    const fullRenderCanvas = cropper.getCroppedCanvas({
+      fillColor: 'transparent'
     });
 
-    const croppedDataUrl = canvas.toDataURL('image/png');
+    const scaleX = targetWidth / cropBoxData.width;
+    const scaleY = targetHeight / cropBoxData.height;
+
+    const offsetX = (canvasData.left - cropBoxData.left) * scaleX;
+    const offsetY = (canvasData.top - cropBoxData.top) * scaleY;
+    const drawWidth = canvasData.width * scaleX;
+    const drawHeight = canvasData.height * scaleY;
+
+    ctx.drawImage(fullRenderCanvas, offsetX, offsetY, drawWidth, drawHeight);
+
+    const croppedDataUrl = outputCanvas.toDataURL('image/png');
     applyPrintToMesh(currentEditingType, croppedDataUrl);
 
     // Switch UI Buttons
