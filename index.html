@@ -159,7 +159,7 @@
     .modal-card {
       background: #ffffff;
       width: 90%;
-      max-width: 600px;
+      max-width: 620px;
       border-radius: 20px;
       padding: 24px;
       box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
@@ -179,30 +179,38 @@
     }
     .crop-container {
       width: 100%;
-      height: 380px;
-      overflow: hidden;
+      aspect-ratio: 1.31;
       border-radius: 12px;
       background: #e4e4e7;
+      border: 2px dashed #2563eb;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
     }
-    .crop-container img {
-      max-width: 100%;
-      display: block;
+    #editor-canvas {
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+      background-image: 
+        linear-gradient(45deg, #ccc 25%, transparent 25%), 
+        linear-gradient(-45deg, #ccc 25%, transparent 25%), 
+        linear-gradient(45deg, transparent 75%, #ccc 75%), 
+        linear-gradient(-45deg, transparent 75%, #ccc 75%);
+      background-size: 16px 16px;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
     }
-
-    /* Custom Cropper Styles */
-    .cropper-line, .cropper-point {
-      display: none !important;
-    }
-    .cropper-view-box {
-      outline: 2px solid #2563eb !important;
-      outline-color: rgba(37, 99, 235, 0.8) !important;
+    #editor-canvas:active {
+      cursor: grabbing;
     }
 
     /* Editor Toolbar */
     .editor-toolbar {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 12px;
       align-items: center;
       justify-content: space-between;
       background: #f4f4f6;
@@ -229,7 +237,7 @@
       background: #18181b;
       color: #ffffff;
     }
-    .rotate-slider {
+    .slider-control {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -237,8 +245,8 @@
       font-weight: 600;
       color: #52525b;
     }
-    .rotate-slider input[type="range"] {
-      width: 100px;
+    .slider-control input[type="range"] {
+      width: 90px;
       cursor: pointer;
     }
 
@@ -254,10 +262,6 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
-
-  <!-- Cropper.js CDN -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 </head>
 <body>
 
@@ -279,7 +283,6 @@
 
 <!-- Controls Panel -->
 <div class="bottom-controls">
-  <!-- Front Controls -->
   <div id="wrapper-front">
     <label for="upload-front" class="btn" id="btn-front-upload">Front Print</label>
     <input type="file" id="upload-front" accept="image/*">
@@ -289,7 +292,6 @@
     </div>
   </div>
 
-  <!-- Back Controls -->
   <div id="wrapper-back">
     <label for="upload-back" class="btn" id="btn-back-upload">Back Print</label>
     <input type="file" id="upload-back" accept="image/*">
@@ -302,7 +304,7 @@
   <button class="btn btn-action" onclick="takeScreenshot()">Take Screenshot</button>
 </div>
 
-<!-- Crop Editor Pop-up Modal -->
+<!-- Editor Pop-up Modal -->
 <div class="modal-overlay" id="crop-modal">
   <div class="modal-card">
     <div class="modal-header">
@@ -310,17 +312,21 @@
     </div>
     
     <div class="crop-container">
-      <img id="crop-target-image" src="" alt="Crop Target">
+      <canvas id="editor-canvas" width="1024" height="781"></canvas>
     </div>
 
     <!-- Controls Toolbar -->
     <div class="editor-toolbar">
       <div class="tool-group">
-        <button class="tool-btn" onclick="resetCropAll()">Original</button>
-        <button class="tool-btn" onclick="flipHorizontal()">Flip H</button>
-        <button class="tool-btn" onclick="resetAngleOnly()">Align (0°)</button>
+        <button class="tool-btn" onclick="resetTransform()">Original</button>
+        <button class="tool-btn" onclick="toggleFlipX()">Flip H</button>
+        <button class="tool-btn" onclick="alignZero()">Align (0°)</button>
       </div>
-      <div class="rotate-slider">
+      <div class="slider-control">
+        <span>Scale:</span>
+        <input type="range" id="scale-range" min="0.1" max="3" step="0.01" value="1" oninput="handleScaleSlider(this.value)">
+      </div>
+      <div class="slider-control">
         <span>Rotate:</span>
         <input type="range" id="rotate-range" min="-180" max="180" value="0" oninput="handleRotateSlider(this.value)">
       </div>
@@ -341,11 +347,18 @@
   let fabricAOMap = null;
   const textureLoader = new THREE.TextureLoader();
 
-  // Cropper State
-  let cropper = null;
+  // Print Transform State & Store
   let currentEditingType = null;
-  let currentScaleX = 1;
-  const originalRawImages = { front: null, back: null };
+  const loadedImageObjects = { front: null, back: null };
+  const printTransformState = {
+    front: { x: 512, y: 390.5, scale: 1, rotate: 0, flipX: 1 },
+    back: { x: 512, y: 390.5, scale: 1, rotate: 0, flipX: 1 }
+  };
+
+  // Canvas Editor Context
+  let editorCanvas, editorCtx;
+  let isDragging = false;
+  let dragStart = { x: 0, y: 0 };
 
   function init() {
     const container = document.getElementById('canvas-container');
@@ -363,7 +376,6 @@
     renderer.toneMappingExposure = 1.05;
     container.appendChild(renderer.domElement);
 
-    // Studio Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.95);
     scene.add(ambientLight);
 
@@ -396,7 +408,6 @@
       }
     }
 
-    // Load Main Hoodie
     gltfLoader.load('hoodie-v1.glb', (gltf) => {
       mainHoodieMesh = gltf.scene;
       mainHoodieMesh.traverse((child) => {
@@ -433,7 +444,6 @@
       return mat;
     }
 
-    // Load Front Mesh
     gltfLoader.load('front_print.glb', (gltf) => {
       const mesh = gltf.scene;
       mesh.traverse((child) => {
@@ -446,7 +456,6 @@
       checkAllLoaded();
     });
 
-    // Load Back Mesh
     gltfLoader.load('back_print.glb', (gltf) => {
       const mesh = gltf.scene;
       mesh.traverse((child) => {
@@ -459,106 +468,140 @@
       checkAllLoaded();
     });
 
+    setupEditorEvents();
     window.addEventListener('resize', onWindowResize);
     animate();
+  }
+
+  function setupEditorEvents() {
+    editorCanvas = document.getElementById('editor-canvas');
+    editorCtx = editorCanvas.getContext('2d');
+
+    editorCanvas.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      dragStart = { x: e.clientX, y: e.clientY };
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging || !currentEditingType) return;
+      const rect = editorCanvas.getBoundingClientRect();
+      const scaleX = editorCanvas.width / rect.width;
+      const scaleY = editorCanvas.height / rect.height;
+
+      const dx = (e.clientX - dragStart.x) * scaleX;
+      const dy = (e.clientY - dragStart.y) * scaleY;
+
+      const state = printTransformState[currentEditingType];
+      state.x += dx;
+      state.y += dy;
+
+      dragStart = { x: e.clientX, y: e.clientY };
+      drawEditorCanvas();
+    });
+
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    editorCanvas.addEventListener('wheel', (e) => {
+      if (!currentEditingType) return;
+      e.preventDefault();
+      const state = printTransformState[currentEditingType];
+      const zoomFactor = e.deltaY < 0 ? 1.05 : 0.95;
+      state.scale = Math.min(Math.max(0.05, state.scale * zoomFactor), 4);
+      document.getElementById('scale-range').value = state.scale;
+      drawEditorCanvas();
+    }, { passive: false });
   }
 
   function changeHoodieColor(colorHex) {
     if (!mainHoodieMesh) return;
     mainHoodieMesh.traverse((child) => {
-      if (child.isMesh) {
-        child.material.color.setHex(colorHex);
-      }
+      if (child.isMesh) child.material.color.setHex(colorHex);
     });
   }
 
-  // Open Crop Modal safely with image loading sync
-  function openCropModal(type, imageSrc) {
+  function openCropModal(type, imgObj) {
     currentEditingType = type;
+    loadedImageObjects[type] = imgObj;
+
     document.getElementById('crop-modal-title').innerText = `Adjust ${type === 'front' ? 'Front' : 'Back'} Print`;
-    
-    const modal = document.getElementById('crop-modal');
-    modal.style.display = 'flex';
+    document.getElementById('crop-modal').style.display = 'flex';
 
-    const targetImg = document.getElementById('crop-target-image');
+    const state = printTransformState[type];
+    document.getElementById('scale-range').value = state.scale;
+    document.getElementById('rotate-range').value = state.rotate;
 
-    if (cropper) {
-      cropper.destroy();
-      cropper = null;
-    }
-
-    targetImg.onload = function() {
-      if (cropper) return; // Prevent double-init
-      cropper = new Cropper(targetImg, {
-        aspectRatio: 1.31,
-        viewMode: 1,
-        dragMode: 'move',
-        cropBoxMovable: false,
-        cropBoxResizable: false,
-        toggleDragModeOnDblclick: false,
-        autoCropArea: 0.75, // Keeps image initially inside frame so nothing gets cut off
-        ready() {
-          currentScaleX = 1;
-          document.getElementById('rotate-range').value = 0;
-        },
-        crop(event) {
-          document.getElementById('rotate-range').value = Math.round(event.detail.rotate);
-        }
-      });
-    };
-
-    targetImg.src = imageSrc;
-    if (targetImg.complete && targetImg.src === imageSrc) {
-      targetImg.onload();
-    }
+    drawEditorCanvas();
   }
 
-  /* Editor Actions */
-  function resetCropAll() {
-    if (!cropper) return;
-    currentScaleX = 1;
+  function drawEditorCanvas() {
+    if (!currentEditingType || !loadedImageObjects[currentEditingType]) return;
+
+    const img = loadedImageObjects[currentEditingType];
+    const state = printTransformState[currentEditingType];
+
+    editorCtx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
+
+    editorCtx.save();
+    editorCtx.translate(state.x, state.y);
+    editorCtx.rotate((state.rotate * Math.PI) / 180);
+    editorCtx.scale(state.scale * state.flipX, state.scale);
+
+    // Центрируем отрисовку картинки в перенесенной точке
+    editorCtx.drawImage(img, -img.width / 2, -img.height / 2);
+    editorCtx.restore();
+  }
+
+  function resetTransform() {
+    if (!currentEditingType || !loadedImageObjects[currentEditingType]) return;
+    const img = loadedImageObjects[currentEditingType];
+    const state = printTransformState[currentEditingType];
+
+    state.x = editorCanvas.width / 2;
+    state.y = editorCanvas.height / 2;
+    state.rotate = 0;
+    state.flipX = 1;
+    // Подгоняем масштаб, чтобы картинка красиво встала в рамку по умолчанию
+    state.scale = Math.min((editorCanvas.width * 0.7) / img.width, (editorCanvas.height * 0.7) / img.height);
+
+    document.getElementById('scale-range').value = state.scale;
     document.getElementById('rotate-range').value = 0;
-    cropper.reset();
+    drawEditorCanvas();
   }
 
-  function flipHorizontal() {
-    if (!cropper) return;
-    currentScaleX = currentScaleX === 1 ? -1 : 1;
-    cropper.scaleX(currentScaleX);
+  function toggleFlipX() {
+    if (!currentEditingType) return;
+    printTransformState[currentEditingType].flipX *= -1;
+    drawEditorCanvas();
   }
 
-  function resetAngleOnly() {
-    if (!cropper) return;
+  function alignZero() {
+    if (!currentEditingType) return;
+    printTransformState[currentEditingType].rotate = 0;
     document.getElementById('rotate-range').value = 0;
-    cropper.rotateTo(0);
+    drawEditorCanvas();
   }
 
-  function handleRotateSlider(value) {
-    if (!cropper) return;
-    cropper.rotateTo(parseFloat(value));
+  function handleScaleSlider(val) {
+    if (!currentEditingType) return;
+    printTransformState[currentEditingType].scale = parseFloat(val);
+    drawEditorCanvas();
+  }
+
+  function handleRotateSlider(val) {
+    if (!currentEditingType) return;
+    printTransformState[currentEditingType].rotate = parseFloat(val);
+    drawEditorCanvas();
   }
 
   function closeCropModal() {
     document.getElementById('crop-modal').style.display = 'none';
-    if (cropper) {
-      cropper.destroy();
-      cropper = null;
-    }
   }
 
   function applyCroppedPrint() {
-    if (!cropper || !currentEditingType) return;
+    if (!currentEditingType) return;
 
-    const croppedCanvas = cropper.getCroppedCanvas({
-      width: 1024,
-      height: Math.round(1024 / 1.31),
-      fillColor: 'transparent',
-      imageSmoothingEnabled: true,
-      imageSmoothingQuality: 'high'
-    });
-
-    const croppedDataUrl = croppedCanvas.toDataURL('image/png');
-    applyPrintToMesh(currentEditingType, croppedDataUrl);
+    const printDataUrl = editorCanvas.toDataURL('image/png');
+    applyPrintToMesh(currentEditingType, printDataUrl);
 
     document.getElementById(`btn-${currentEditingType}-upload`).style.display = 'none';
     document.getElementById(`group-${currentEditingType}-active`).style.display = 'inline-flex';
@@ -567,8 +610,8 @@
   }
 
   function reeditPrint(type) {
-    if (originalRawImages[type]) {
-      openCropModal(type, originalRawImages[type]);
+    if (loadedImageObjects[type]) {
+      openCropModal(type, loadedImageObjects[type]);
     }
   }
 
@@ -604,30 +647,29 @@
     mesh.material.map = null;
     mesh.material.needsUpdate = true;
 
-    originalRawImages[type] = null;
+    loadedImageObjects[type] = null;
+    printTransformState[type] = { x: 512, y: 390.5, scale: 1, rotate: 0, flipX: 1 };
     document.getElementById(`upload-${type}`).value = '';
 
     document.getElementById(`group-${type}-active`).style.display = 'none';
     document.getElementById(`btn-${type}-upload`).style.display = 'inline-flex';
   }
 
-  document.getElementById('upload-front').addEventListener('change', (e) => {
+  function handleFileSelect(type, e) {
     const file = e.target.files[0];
     if (file) {
-      const url = URL.createObjectURL(file);
-      originalRawImages['front'] = url;
-      openCropModal('front', url);
+      const img = new Image();
+      img.onload = () => {
+        loadedImageObjects[type] = img;
+        resetTransform(); // Автомасштаб при первом вбросе
+        openCropModal(type, img);
+      };
+      img.src = URL.createObjectURL(file);
     }
-  });
+  }
 
-  document.getElementById('upload-back').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      originalRawImages['back'] = url;
-      openCropModal('back', url);
-    }
-  });
+  document.getElementById('upload-front').addEventListener('change', (e) => handleFileSelect('front', e));
+  document.getElementById('upload-back').addEventListener('change', (e) => handleFileSelect('back', e));
 
   async function takeScreenshot() {
     const btn = document.querySelector('.btn-action');
@@ -647,9 +689,7 @@
         if (btn) {
           const originalText = btn.innerText;
           btn.innerText = 'Copied!';
-          setTimeout(() => {
-            btn.innerText = originalText;
-          }, 1500);
+          setTimeout(() => { btn.innerText = originalText; }, 1500);
         }
       } catch (err) {
         console.error('Failed to copy screenshot: ', err);
