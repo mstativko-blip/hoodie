@@ -239,7 +239,6 @@
           child.material.metalness = 0.05;
           child.material.color.setHex(0xF3F3F0);
 
-          // Extract fabric texture maps for print integration
           if (child.material.normalMap) fabricNormalMap = child.material.normalMap;
           if (child.material.aoMap) fabricAOMap = child.material.aoMap;
         }
@@ -248,7 +247,6 @@
       checkAllLoaded();
     });
 
-    // Helper for creating physically integrated print material
     function createPrintMaterial() {
       const mat = new THREE.MeshStandardMaterial({
         transparent: true,
@@ -256,11 +254,10 @@
         depthWrite: false,
         polygonOffset: true,
         polygonOffsetFactor: -1,
-        roughness: 0.68, // Print ink roughness
+        roughness: 0.68,
         metalness: 0.02
       });
 
-      // Apply fabric texture physics if available
       if (fabricNormalMap) mat.normalMap = fabricNormalMap;
       if (fabricAOMap) {
         mat.aoMap = fabricAOMap;
@@ -300,7 +297,6 @@
     animate();
   }
 
-  // Change Hoodie Fabric Color
   function changeHoodieColor(colorHex) {
     if (!mainHoodieMesh) return;
     mainHoodieMesh.traverse((child) => {
@@ -310,7 +306,6 @@
     });
   }
 
-  // Take Screenshot
   function takeScreenshot() {
     renderer.render(scene, camera);
     const dataURL = renderer.domElement.toDataURL('image/png');
@@ -321,7 +316,7 @@
     link.click();
   }
 
-  // Load Print with CORRECT "CONTAIN" mode (Respects Mesh Aspect Ratio)
+  // Load Print with COVER mode & mirror fix
   function applyPrint(type, imageSrc) {
     const mesh = printMeshes[type];
     if (!mesh) return;
@@ -336,34 +331,37 @@
       const img = texture.image;
       const imgAspect = img.width / img.height;
 
-      // Пропорции твоей UV-плашки из Blender (~1.31)
+      // Пропорции UV-плашки
       const meshAspect = 1.31;
 
       let repeatX = 1;
       let repeatY = 1;
 
+      // Алгоритм COVER: заполнение плашки без размыва геометрии
       if (imgAspect > meshAspect) {
-        // Картинка шире плашки — подгоняем по ширине, сжимаем высоту
-        repeatY = imgAspect / meshAspect;
-      } else {
-        // Картинка вертикальная или квадратная — подгоняем по высоте, сжимаем ширину
         repeatX = meshAspect / imgAspect;
+      } else {
+        repeatY = imgAspect / meshAspect;
       }
 
-      texture.repeat.set(repeatX, repeatY);
-      texture.offset.set((1 - repeatX) / 2, (1 - repeatY) / 2);
+      // Разворот зеркал сзади
+      if (type === 'back') {
+        texture.repeat.set(-repeatX, repeatY);
+        texture.offset.set((1 + repeatX) / 2, (1 - repeatY) / 2);
+      } else {
+        texture.repeat.set(repeatX, repeatY);
+        texture.offset.set((1 - repeatX) / 2, (1 - repeatY) / 2);
+      }
 
       mesh.material.map = texture;
       mesh.material.opacity = 1.0;
       mesh.material.needsUpdate = true;
 
-      // Switch button state
       document.getElementById(`btn-${type}-label`).style.display = 'none';
       document.getElementById(`btn-${type}-reset`).style.display = 'inline-flex';
     });
   }
 
-  // Clear Print
   function clearPrint(type) {
     const mesh = printMeshes[type];
     if (!mesh) return;
