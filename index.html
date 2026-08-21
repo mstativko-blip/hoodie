@@ -321,7 +321,7 @@
     link.click();
   }
 
-  // Load Print with "CONTAIN" mode (No crop, fits entirely)
+  // Load Print with CORRECT "CONTAIN" mode (Respects Mesh Aspect Ratio)
   function applyPrint(type, imageSrc) {
     const mesh = printMeshes[type];
     if (!mesh) return;
@@ -330,22 +330,28 @@
       texture.encoding = THREE.sRGBEncoding;
       texture.flipY = false;
 
-      const img = texture.image;
-      const imgAspect = img.width / img.height;
-
       texture.wrapS = THREE.ClampToEdgeWrapping;
       texture.wrapT = THREE.ClampToEdgeWrapping;
 
-      // CONTAIN logic: Fit completely without cropping
-      if (imgAspect > 1) {
-        // Landscape orientation
-        texture.repeat.set(1, 1 / imgAspect);
-        texture.offset.set(0, (1 - 1 / imgAspect) / 2);
+      const img = texture.image;
+      const imgAspect = img.width / img.height;
+
+      // Пропорции твоей UV-плашки из Blender (~1.31)
+      const meshAspect = 1.31;
+
+      let repeatX = 1;
+      let repeatY = 1;
+
+      if (imgAspect > meshAspect) {
+        // Картинка шире плашки — подгоняем по ширине, сжимаем высоту
+        repeatY = imgAspect / meshAspect;
       } else {
-        // Portrait or square orientation
-        texture.repeat.set(imgAspect, 1);
-        texture.offset.set((1 - imgAspect) / 2, 0);
+        // Картинка вертикальная или квадратная — подгоняем по высоте, сжимаем ширину
+        repeatX = meshAspect / imgAspect;
       }
+
+      texture.repeat.set(repeatX, repeatY);
+      texture.offset.set((1 - repeatX) / 2, (1 - repeatY) / 2);
 
       mesh.material.map = texture;
       mesh.material.opacity = 1.0;
